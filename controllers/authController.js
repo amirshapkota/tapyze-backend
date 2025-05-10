@@ -1,0 +1,182 @@
+import jwt from 'jsonwebtoken';
+import Customer from '../models/Customer.js';
+import Merchant from '../models/Merchant.js';
+
+// Helper function to create JWT
+const signToken = (id, type) => {
+  return jwt.sign({ id, type }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN
+  });
+};
+
+// Helper function to send token response
+const createSendToken = (user, statusCode, res, message = 'Success') => {
+  const token = signToken(user._id, user.constructor.modelName);
+  
+  res.status(statusCode).json({
+    status: 'success',
+    message,
+    token,
+    data: {
+      user
+    }
+  });
+};
+
+// CUSTOMER SIGNUP
+export const customerSignup = async (req, res, next) => {
+  try {
+    const {
+      fullName,
+      email,
+      phone,
+      gender,
+      password,
+      confirmPassword
+    } = req.body;
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Passwords do not match'
+      });
+    }
+    
+    // Check if user already exists
+    const existingCustomer = await Customer.findOne({
+      $or: [{ email }, { phone }]
+    });
+    
+    if (existingCustomer) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'User with this email or phone already exists'
+      });
+    }
+    
+    // Create customer
+    const customer = await Customer.create({
+      fullName,
+      email,
+      phone,
+      gender,
+      password
+    });
+    
+    createSendToken(customer, 201, res, 'Account created successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// CUSTOMER LOGIN
+export const customerLogin = async (req, res, next) => {
+  try {
+    const { email, phone, password } = req.body;
+    
+    // Check if email/phone and password exist
+    if ((!email && !phone) || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide email/phone and password'
+      });
+    }
+    
+    // Check if customer exists
+    const customer = await Customer.findOne({
+      $or: [{ email }, { phone }]
+    }).select('+password');
+    
+    if (!customer || !(await customer.correctPassword(password, customer.password))) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Incorrect credentials'
+      });
+    }
+    
+    createSendToken(customer, 200, res, 'Login successful');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// MERCHANT SIGNUP
+export const merchantSignup = async (req, res, next) => {
+  try {
+    const {
+      businessName,
+      ownerName,
+      email,
+      phone,
+      businessAddress,
+      businessType,
+      password,
+      confirmPassword
+    } = req.body;
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Passwords do not match'
+      });
+    }
+    
+    // Check if merchant already exists
+    const existingMerchant = await Merchant.findOne({
+      $or: [{ email }, { phone }]
+    });
+    
+    if (existingMerchant) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Merchant with this email or phone already exists'
+      });
+    }
+    
+    // Create merchant
+    const merchant = await Merchant.create({
+      businessName,
+      ownerName,
+      email,
+      phone,
+      businessAddress,
+      businessType,
+      password
+    });
+    
+    createSendToken(merchant, 201, res, 'Merchant account created successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// MERCHANT LOGIN
+export const merchantLogin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Check if email and password exist
+    if (!email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide email and password'
+      });
+    }
+    
+    // Check if merchant exists
+    const merchant = await Merchant.findOne({ email }).select('+password');
+    
+    if (!merchant || !(await merchant.correctPassword(password, merchant.password))) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Incorrect email or password'
+      });
+    }
+    
+    createSendToken(merchant, 200, res, 'Login successful');
+  } catch (error) {
+    next(error);
+  }
+};

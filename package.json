@@ -1,7 +1,7 @@
 {
   "name": "tapyze-backend",
   "version": "1.0.0",
-  "description": "Modern Authentication Backend for TAPYZE Wallet with Real-time Support",
+  "description": "Backend for TAPYZE Wallet with Real-time Support",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -11,15 +11,15 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^7.6.3",
+    "mongoose": "^7.8.7",
     "morgan": "^1.10.0",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.1.10"
   },
   "keywords": [
     "tapyze",
