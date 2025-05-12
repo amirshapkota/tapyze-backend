@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
+import Wallet from '../models/Wallet.js';
 
 // Helper function to create JWT
 const signToken = (id, type) => {
@@ -20,6 +21,14 @@ const createSendToken = (user, statusCode, res, message = 'Success') => {
     data: {
       user
     }
+  });
+};
+
+// Helper function to create wallet for new users
+const createWallet = async (owner, ownerType) => {
+  return await Wallet.create({
+    owner: owner._id,
+    ownerType
   });
 };
 
@@ -63,6 +72,9 @@ export const customerSignup = async (req, res, next) => {
       gender,
       password
     });
+    
+    // Create wallet for customer
+    await createWallet(customer, 'Customer');
     
     createSendToken(customer, 201, res, 'Account created successfully');
   } catch (error) {
@@ -145,6 +157,9 @@ export const merchantSignup = async (req, res, next) => {
       businessType,
       password
     });
+    
+    // Create wallet for merchant
+    await createWallet(merchant, 'Merchant');
     
     createSendToken(merchant, 201, res, 'Merchant account created successfully');
   } catch (error) {
