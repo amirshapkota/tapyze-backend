@@ -6,6 +6,7 @@ import morgan from 'morgan';
 
 // Import routes
 import authRoutes from './routes/auth.js';
+import walletRoutes from './routes/walletRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -21,6 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Basic health check
 app.get('/health', (req, res) => {
