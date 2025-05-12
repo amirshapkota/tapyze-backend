@@ -1,4 +1,3 @@
-// controllers/walletController.js
 import Wallet from '../models/Wallet.js';
 import Transaction from '../models/Transaction.js';
 import mongoose from 'mongoose';
