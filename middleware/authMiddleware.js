@@ -1,4 +1,3 @@
-// middleware/authMiddleware.js
 import jwt from 'jsonwebtoken';
 import { promisify } from 'util';
 import Customer from '../models/Customer.js';
