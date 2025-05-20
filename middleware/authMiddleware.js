@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { promisify } from 'util';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
+import Admin from '../models/Admin.js';
 
 export const protect = async (req, res, next) => {
   try {
@@ -23,11 +24,12 @@ export const protect = async (req, res, next) => {
     
     // Check if user still exists
     let currentUser;
-    
     if (decoded.type === 'Customer') {
       currentUser = await Customer.findById(decoded.id);
     } else if (decoded.type === 'Merchant') {
       currentUser = await Merchant.findById(decoded.id);
+    } else if (decoded.type === 'Admin') {
+      currentUser = await Admin.findById(decoded.id);
     }
     
     if (!currentUser) {
@@ -42,6 +44,7 @@ export const protect = async (req, res, next) => {
       id: currentUser._id,
       type: decoded.type
     };
+    
     next();
   } catch (error) {
     res.status(401).json({
@@ -49,4 +52,18 @@ export const protect = async (req, res, next) => {
       message: 'Invalid token or token expired'
     });
   }
+};
+
+// Admin restriction middleware
+export const restrictTo = (...roles) => {
+  return (req, res, next) => {
+    if (req.user.type !== 'Admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'You do not have permission to perform this action'
+      });
+    }
+    
+    next();
+  };
 };
