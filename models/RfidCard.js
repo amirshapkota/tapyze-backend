@@ -1,4 +1,3 @@
-// models/RfidCard.js
 import mongoose from 'mongoose';
 
 const rfidCardSchema = new mongoose.Schema({
