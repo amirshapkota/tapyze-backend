@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
 import Wallet from '../models/Wallet.js';
+import Admin from '../models/Admin.js';
 
 // Helper function to create JWT
 const signToken = (id, type) => {
@@ -191,6 +192,35 @@ export const merchantLogin = async (req, res, next) => {
     }
     
     createSendToken(merchant, 200, res, 'Login successful');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ADMIN LOGIN
+export const adminLogin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Check if email and password exist
+    if (!email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide email and password'
+      });
+    }
+    
+    // Check if admin exists
+    const admin = await Admin.findOne({ email }).select('+password');
+    
+    if (!admin || !(await admin.correctPassword(password, admin.password))) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Incorrect email or password'
+      });
+    }
+    
+    createSendToken(admin, 200, res, 'Login successful');
   } catch (error) {
     next(error);
   }
