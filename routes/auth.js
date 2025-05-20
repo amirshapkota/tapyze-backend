@@ -16,4 +16,7 @@ router.post('/customer/login', customerLogin);
 router.post('/merchant/signup', merchantSignup);
 router.post('/merchant/login', merchantLogin);
 
+// Admin routes
+router.post('/admin/login', adminLogin);
+
 export default router;
