@@ -7,6 +7,8 @@ import morgan from 'morgan';
 // Import routes
 import authRoutes from './routes/auth.js';
 import walletRoutes from './routes/walletRoutes.js';
+import deviceRoutes from './routes/deviceRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -23,6 +25,8 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/devices', deviceRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Basic health check
 app.get('/health', (req, res) => {
@@ -52,6 +56,29 @@ app.use((err, req, res, next) => {
     return res.status(400).json({
       status: 'error',
       message: `${field} already exists`
+    });
+  }
+  
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Invalid token. Please log in again.'
+    });
+  }
+  
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Your token has expired. Please log in again.'
+    });
+  }
+  
+  // MongoDB transaction errors
+  if (err.errorLabels && err.errorLabels.includes('TransientTransactionError')) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Transaction failed, please try again'
     });
   }
   
