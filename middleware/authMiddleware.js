@@ -47,6 +47,7 @@ export const protect = async (req, res, next) => {
     
     next();
   } catch (error) {
+    console.error('Auth error:', error.message);
     res.status(401).json({
       status: 'error',
       message: 'Invalid token or token expired'
@@ -54,16 +55,26 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// Admin restriction middleware
+// Restriction middleware to check user types
 export const restrictTo = (...roles) => {
   return (req, res, next) => {
-    if (req.user.type !== 'Admin') {
+    if (!roles.includes(req.user.type)) {
       return res.status(403).json({
         status: 'error',
         message: 'You do not have permission to perform this action'
       });
     }
-    
     next();
   };
+};
+
+// Admin only middleware (convenience function)
+export const adminOnly = (req, res, next) => {
+  if (req.user.type !== 'Admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'This route is restricted to admin users only'
+    });
+  }
+  next();
 };
