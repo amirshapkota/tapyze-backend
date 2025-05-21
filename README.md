@@ -97,6 +97,15 @@ Auth: Bearer Token
 {{baseUrl}}/devices/cards (GET)
 Auth: Bearer Token
 
+{{baseUrl}}/devices/cards/{{cardId}}/deactivate
+Auth: Bearer Token
+
+```
+{
+  "reason": "LOST"
+}
+```
+
 ## NFC Scanner Tests
 
 {{baseUrl}}/devices/scanners/assign (POST)

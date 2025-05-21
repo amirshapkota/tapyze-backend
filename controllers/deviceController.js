@@ -103,7 +103,10 @@ export const getCustomerCards = async (req, res, next) => {
 export const deactivateCard = async (req, res, next) => {
   try {
     const { cardId } = req.params;
-    const customerId = req.user.id;
+    const userId = req.user.id; // or req.user._id if that's what your auth middleware sets
+    const userType = req.user.type;
+    
+    console.log(`Deactivation attempt - Card ID: ${cardId}, User ID: ${userId}, User Type: ${userType}`);
     
     const card = await RfidCard.findById(cardId);
     
@@ -114,14 +117,26 @@ export const deactivateCard = async (req, res, next) => {
       });
     }
     
-    // Verify ownership
-    if (card.owner.toString() !== customerId && req.user.type !== 'Admin') {
+    // Convert both IDs to strings for comparison
+    const cardOwnerStr = card.owner.toString();
+    const userIdStr = userId.toString();
+    
+    console.log(`Comparing - Card Owner: ${cardOwnerStr}, User ID: ${userIdStr}`);
+    
+    // Check if user is the owner or an admin
+    const isOwner = cardOwnerStr === userIdStr;
+    const isAdmin = userType === 'Admin';
+    
+    console.log(`Authorization - Is Owner: ${isOwner}, Is Admin: ${isAdmin}`);
+    
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         status: 'error',
         message: 'You do not have permission to deactivate this card'
       });
     }
     
+    // Update card status
     card.isActive = false;
     card.status = req.body.reason === 'LOST' ? 'LOST' : 'INACTIVE';
     await card.save();
@@ -134,6 +149,7 @@ export const deactivateCard = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('Error in deactivateCard:', error);
     next(error);
   }
 };
