@@ -3,7 +3,8 @@ import {
   customerSignup,
   customerLogin,
   merchantSignup,
-  merchantLogin
+  merchantLogin,
+  adminLogin
 } from '../controllers/authController.js';
 
 const router = express.Router();
