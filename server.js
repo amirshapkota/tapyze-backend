@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import walletRoutes from './routes/walletRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Basic health check
 app.get('/health', (req, res) => {

@@ -275,3 +275,81 @@ export const setupFirstAdmin = async (req, res, next) => {
     next(error);
   }
 };
+
+// CREATE ADDITIONAL ADMIN (Only existing admins can do this)
+export const createAdmin = async (req, res, next) => {
+  try {
+    // Check if the request is coming from an admin
+    if (req.user.type !== 'Admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Only existing admins can create new admin accounts'
+      });
+    }
+    
+    const {
+      fullName,
+      email,
+      password,
+      confirmPassword,
+      role = 'ADMIN' // Default role is ADMIN
+    } = req.body;
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Passwords do not match'
+      });
+    }
+    
+    // Check if user already exists
+    const existingAdmin = await Admin.findOne({ email });
+    
+    if (existingAdmin) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Admin with this email already exists'
+      });
+    }
+    
+    // Validate role
+    const validRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+      });
+    }
+    
+    // Extra check: Only SUPER_ADMINs can create other SUPER_ADMINs
+    const currentAdmin = await Admin.findById(req.user.id);
+    if (role === 'SUPER_ADMIN' && currentAdmin.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Only SUPER_ADMINs can create other SUPER_ADMINs'
+      });
+    }
+    
+    // Create admin
+    const admin = await Admin.create({
+      fullName,
+      email,
+      password,
+      role
+    });
+    
+    // Don't send back the password
+    admin.password = undefined;
+    
+    res.status(201).json({
+      status: 'success',
+      message: 'Admin account created successfully',
+      data: {
+        admin
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

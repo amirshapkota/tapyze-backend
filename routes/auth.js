@@ -4,8 +4,12 @@ import {
   customerLogin,
   merchantSignup,
   merchantLogin,
-  adminLogin
+  adminLogin,
+  setupFirstAdmin,
+  createAdmin,
 } from '../controllers/authController.js';
+
+import { protect, adminOnly } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -20,5 +24,7 @@ router.post('/merchant/login', merchantLogin);
 // Admin routes
 router.post('/admin/setup', setupFirstAdmin); // For creating the first admin
 router.post('/admin/login', adminLogin);
+// Create additional admin (admin-only)
+router.post('/admin/create', protect, adminOnly, createAdmin);
 
 export default router;

@@ -151,3 +151,81 @@ Auth: Bearer Token
   "description": "Purchase at Test Shop"
 }
 ```
+
+## Admin
+
+Creating first admin (one time setup)
+
+{{baseUrl}}/auth/admin/setup(POST)
+
+```
+{
+  "fullName": "Super Admin",
+  "email": "admin@example.com",
+  "password": "securePassword123",
+  "confirmPassword": "securePassword123",
+  "setupKey": "your-very-secure-random-string"
+}
+```
+
+{{baseUrl}}/auth/admin/login (POST)
+
+```
+{
+  "email": "admin@example.com",
+  "password": "adminpassword123"
+}
+```
+
+{{baseUrl}}/devices/admin/cards/assign/{{customerId}} (POST)
+Auth: Bearer Token
+
+```
+{
+  "cardUid": "RFID87654321"
+}
+```
+
+{{baseUrl}}/devices/admin/customers/{{customerId}}/cards (GET)
+Auth: Bearer Token
+
+{{baseUrl}}/devices/admin/scanners/assign/{{merchantId}} (POST)
+Auth: Bearer Token
+
+```
+{
+  "deviceId": "NFC43210987",
+  "model": "Scanner Pro",
+  "firmwareVersion": "2.0.0"
+}
+```
+
+{{baseUrl}}/devices/admin/merchants/{{merchantId}}/scanners (GET)
+Auth: Bearer Token
+
+{{baseUrl}}/admin/customers (GET)
+Auth: Bearer Token
+
+{{baseUrl}}/admin/merchants (GET)
+Auth: Bearer Token
+
+{{baseUrl}}/admin/transactions (GET)
+Auth: Bearer Token
+
+### Create a New Admin
+
+{{baseUrl}}/auth/admin/create (POST)
+Auth: Bearer Token
+
+```
+{
+  "fullName": "Support Admin",
+  "email": "support@wallet.com",
+  "password": "Support123",
+  "confirmPassword": "Support123",
+  "role": "ADMIN"
+}
+```
+
+{{baseUrl}}/admin/admins (GET)
+Auth: Bearer Token
