@@ -225,3 +225,53 @@ export const adminLogin = async (req, res, next) => {
     next(error);
   }
 };
+
+// SETUP FIRST ADMIN (one-time setup)
+export const setupFirstAdmin = async (req, res, next) => {
+  try {
+    // Check if any admins already exist
+    const adminCount = await Admin.countDocuments();
+    
+    if (adminCount > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Admin accounts already exist. Cannot use this endpoint.'
+      });
+    }
+    
+    const {
+      fullName,
+      email,
+      password,
+      confirmPassword
+    } = req.body;
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Passwords do not match'
+      });
+    }
+    
+    // Validate required fields
+    if (!fullName || !email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide all required fields'
+      });
+    }
+    
+    // Create first admin as SUPER_ADMIN
+    const admin = await Admin.create({
+      fullName,
+      email,
+      password,
+      role: 'SUPER_ADMIN'
+    });
+    
+    createSendToken(admin, 201, res, 'First admin account created successfully');
+  } catch (error) {
+    next(error);
+  }
+};
