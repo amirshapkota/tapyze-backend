@@ -103,7 +103,7 @@ export const getCustomerCards = async (req, res, next) => {
 export const deactivateCard = async (req, res, next) => {
   try {
     const { cardId } = req.params;
-    const userId = req.user.id; // or req.user._id if that's what your auth middleware sets
+    const userId = req.user.id;
     const userType = req.user.type;
     
     console.log(`Deactivation attempt - Card ID: ${cardId}, User ID: ${userId}, User Type: ${userType}`);
@@ -240,7 +240,10 @@ export const updateScannerStatus = async (req, res, next) => {
   try {
     const { scannerId } = req.params;
     const { status, firmwareVersion } = req.body;
-    const merchantId = req.user.id;
+    const userId = req.user.id;
+    const userType = req.user.type;
+    
+    console.log(`Scanner update attempt - Scanner ID: ${scannerId}, User ID: ${userId}, User Type: ${userType}`);
     
     const scanner = await NfcScanner.findById(scannerId);
     
@@ -251,19 +254,38 @@ export const updateScannerStatus = async (req, res, next) => {
       });
     }
     
-    // Verify ownership
-    if (scanner.owner.toString() !== merchantId && req.user.type !== 'Admin') {
+    // Convert both IDs to strings for comparison
+    const scannerOwnerStr = scanner.owner.toString();
+    const userIdStr = userId.toString();
+    
+    console.log(`Comparing - Scanner Owner: ${scannerOwnerStr}, User ID: ${userIdStr}`);
+    
+    // Check if user is the owner or an admin
+    const isOwner = scannerOwnerStr === userIdStr;
+    const isAdmin = userType === 'Admin';
+    
+    console.log(`Authorization - Is Owner: ${isOwner}, Is Admin: ${isAdmin}`);
+    
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         status: 'error',
         message: 'You do not have permission to update this scanner'
       });
     }
     
-    // Update scanner
+    // Validate status if provided
     if (status) {
+      const validStatuses = ['ONLINE', 'OFFLINE', 'MAINTENANCE', 'PENDING_ACTIVATION'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+        });
+      }
       scanner.status = status;
     }
     
+    // Update firmware version if provided
     if (firmwareVersion) {
       scanner.firmwareVersion = firmwareVersion;
     }
@@ -279,6 +301,7 @@ export const updateScannerStatus = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('Error in updateScannerStatus:', error);
     next(error);
   }
 };

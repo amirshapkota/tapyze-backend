@@ -97,7 +97,7 @@ Auth: Bearer Token
 {{baseUrl}}/devices/cards (GET)
 Auth: Bearer Token
 
-{{baseUrl}}/devices/cards/{{cardId}}/deactivate
+{{baseUrl}}/devices/cards/{{cardId}}/deactivate (PATCH)
 Auth: Bearer Token
 
 ```
@@ -121,6 +121,16 @@ Auth: Bearer Token
 
 {{baseUrl}}/devices/scanners (GET)
 Auth: Bearer Token
+
+{{baseUrl}}/devices/scanners/{{scannerId}} (PATCH)
+Auth: Bearer Token
+
+```
+{
+  "status": "MAINTENANCE",
+  "firmwareVersion": "1.0.1"
+}
+```
 
 ## RFID Payment Tests
 
