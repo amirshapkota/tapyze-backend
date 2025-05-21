@@ -5,9 +5,11 @@ import {
   deactivateCard,
   assignScannerToMerchant,
   getMerchantScanners,
-  updateScannerStatus
+  updateScannerStatus,
+  getAllCards,
+  getAllScanners,
 } from '../controllers/deviceController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, adminOnly  } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -31,5 +33,9 @@ router.patch('/scanners/:scannerId', updateScannerStatus);
 // Admin routes for scanner management
 router.post('/admin/scanners/assign/:merchantId', assignScannerToMerchant);
 router.get('/admin/merchants/:merchantId/scanners', getMerchantScanners);
+
+// Admin device management routes 
+router.get('/admin/cards', protect, adminOnly, getAllCards);
+router.get('/admin/scanners', protect, adminOnly, getAllScanners);
 
 export default router;

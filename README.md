@@ -212,6 +212,31 @@ Auth: Bearer Token
 {{baseUrl}}/admin/transactions (GET)
 Auth: Bearer Token
 
+{{baseUrl}}/devices/cards/{{cardId}}/deactivate (PATCH)
+Auth: Bearer Token
+
+```
+{
+  "reason": "LOST"
+}
+```
+
+{{baseUrl}}/devices/scanners/{{scannerId}} (PATCH)
+Auth: Bearer Token
+
+```
+{
+  "status": "MAINTENANCE",
+  "firmwareVersion": "2.0.0"
+}
+```
+
+{{baseUrl}}/devices/admin/cards?page=1&limit=10&isActive=true (GET)
+Auth: Bearer Token
+
+{{baseUrl}}/devices/admin/scanners?page=1&limit=10&status=ONLINE (GET)
+Auth: Bearer Token
+
 ### Create a New Admin
 
 {{baseUrl}}/auth/admin/create (POST)

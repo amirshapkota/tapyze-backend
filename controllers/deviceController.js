@@ -100,13 +100,12 @@ export const getCustomerCards = async (req, res, next) => {
   }
 };
 
+// In deviceController.js
 export const deactivateCard = async (req, res, next) => {
   try {
     const { cardId } = req.params;
     const userId = req.user.id;
     const userType = req.user.type;
-    
-    console.log(`Deactivation attempt - Card ID: ${cardId}, User ID: ${userId}, User Type: ${userType}`);
     
     const card = await RfidCard.findById(cardId);
     
@@ -117,17 +116,9 @@ export const deactivateCard = async (req, res, next) => {
       });
     }
     
-    // Convert both IDs to strings for comparison
-    const cardOwnerStr = card.owner.toString();
-    const userIdStr = userId.toString();
-    
-    console.log(`Comparing - Card Owner: ${cardOwnerStr}, User ID: ${userIdStr}`);
-    
-    // Check if user is the owner or an admin
-    const isOwner = cardOwnerStr === userIdStr;
+    // Verify ownership or admin status
+    const isOwner = card.owner.toString() === userId.toString();
     const isAdmin = userType === 'Admin';
-    
-    console.log(`Authorization - Is Owner: ${isOwner}, Is Admin: ${isAdmin}`);
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({
@@ -139,6 +130,11 @@ export const deactivateCard = async (req, res, next) => {
     // Update card status
     card.isActive = false;
     card.status = req.body.reason === 'LOST' ? 'LOST' : 'INACTIVE';
+    
+    // Track who deactivated the card (if your model has these fields)
+    card.deactivatedAt = new Date();
+    card.deactivatedBy = userId;
+    
     await card.save();
     
     res.status(200).json({
@@ -236,14 +232,13 @@ export const getMerchantScanners = async (req, res, next) => {
   }
 };
 
+// In deviceController.js
 export const updateScannerStatus = async (req, res, next) => {
   try {
     const { scannerId } = req.params;
     const { status, firmwareVersion } = req.body;
     const userId = req.user.id;
     const userType = req.user.type;
-    
-    console.log(`Scanner update attempt - Scanner ID: ${scannerId}, User ID: ${userId}, User Type: ${userType}`);
     
     const scanner = await NfcScanner.findById(scannerId);
     
@@ -254,17 +249,9 @@ export const updateScannerStatus = async (req, res, next) => {
       });
     }
     
-    // Convert both IDs to strings for comparison
-    const scannerOwnerStr = scanner.owner.toString();
-    const userIdStr = userId.toString();
-    
-    console.log(`Comparing - Scanner Owner: ${scannerOwnerStr}, User ID: ${userIdStr}`);
-    
     // Check if user is the owner or an admin
-    const isOwner = scannerOwnerStr === userIdStr;
+    const isOwner = scanner.owner.toString() === userId.toString();
     const isAdmin = userType === 'Admin';
-    
-    console.log(`Authorization - Is Owner: ${isOwner}, Is Admin: ${isAdmin}`);
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({
@@ -290,7 +277,9 @@ export const updateScannerStatus = async (req, res, next) => {
       scanner.firmwareVersion = firmwareVersion;
     }
     
+    // Track last connection
     scanner.lastConnected = new Date();
+    
     await scanner.save();
     
     res.status(200).json({
@@ -302,6 +291,105 @@ export const updateScannerStatus = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Error in updateScannerStatus:', error);
+    next(error);
+  }
+};
+
+
+// Get all cards in the system (admin only)
+export const getAllCards = async (req, res, next) => {
+  try {
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    // Filters
+    const filters = {};
+    
+    if (req.query.status) {
+      filters.status = req.query.status;
+    }
+    
+    if (req.query.isActive === 'true') {
+      filters.isActive = true;
+    } else if (req.query.isActive === 'false') {
+      filters.isActive = false;
+    }
+    
+    // Get cards with pagination and populate owner
+    const cards = await RfidCard.find(filters)
+      .populate('owner', 'fullName email phone')
+      .sort({ issuedAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    
+    // Get total count
+    const total = await RfidCard.countDocuments(filters);
+    
+    res.status(200).json({
+      status: 'success',
+      results: cards.length,
+      data: {
+        cards,
+        pagination: {
+          total,
+          page,
+          pages: Math.ceil(total / limit),
+          limit
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get all scanners in the system (admin only)
+export const getAllScanners = async (req, res, next) => {
+  try {
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    // Filters
+    const filters = {};
+    
+    if (req.query.status) {
+      filters.status = req.query.status;
+    }
+    
+    if (req.query.isActive === 'true') {
+      filters.isActive = true;
+    } else if (req.query.isActive === 'false') {
+      filters.isActive = false;
+    }
+    
+    // Get scanners with pagination and populate owner
+    const scanners = await NfcScanner.find(filters)
+      .populate('owner', 'businessName ownerName email')
+      .sort({ registeredAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    
+    // Get total count
+    const total = await NfcScanner.countDocuments(filters);
+    
+    res.status(200).json({
+      status: 'success',
+      results: scanners.length,
+      data: {
+        scanners,
+        pagination: {
+          total,
+          page,
+          pages: Math.ceil(total / limit),
+          limit
+        }
+      }
+    });
+  } catch (error) {
     next(error);
   }
 };
