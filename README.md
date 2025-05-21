@@ -81,3 +81,54 @@ Auth: Bearer Token
 
 {{baseUrl}}/wallet/transactions (GET)
 Auth: Bearer Token
+
+## RFID Card Tests
+
+{{baseUrl}}/devices/cards/assign (POST)
+
+Auth: Bearer Token
+
+```
+{
+  "cardUid": "RFID12345678"
+}
+```
+
+{{baseUrl}}/devices/cards (GET)
+Auth: Bearer Token
+
+## NFC Scanner Tests
+
+{{baseUrl}}/devices/scanners/assign (POST)
+Auth: Bearer Token
+
+```
+{
+  "deviceId": "NFC98765432",
+  "model": "Scanner X1",
+  "firmwareVersion": "1.0.0"
+}
+```
+
+{{baseUrl}}/devices/scanners (GET)
+Auth: Bearer Token
+
+## RFID Payment Tests
+
+### Verify RFID Card (Merchant View)
+
+{{baseUrl}}/payments/rfid/verify/{{cardUid}} (GET)
+Auth: Bearer Token
+
+### Process RFID Payment (Merchant View)
+
+{{baseUrl}}/payments/rfid/process
+Auth: Bearer Token
+
+```
+{
+  "cardUid": "{{cardUid}}",
+  "amount": 200,
+  "description": "Purchase at Test Shop"
+}
+```
