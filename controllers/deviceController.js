@@ -2,6 +2,7 @@ import RfidCard from '../models/RfidCard.js';
 import NfcScanner from '../models/NfcScanner.js';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
+import bcrypt from 'bcryptjs';
 
 // RFID Card Management with PIN
 export const assignCardToCustomer = async (req, res, next) => {
@@ -217,7 +218,9 @@ export const changeCardPin = async (req, res, next) => {
     // Update PIN
     card.pin = newPin;
     card.requiresPinChange = false;
-    await card.save();
+    
+    // Save only the PIN-related fields to avoid validation issues
+    await card.save({ validateModifiedOnly: true });
     
     res.status(200).json({
       status: 'success',
@@ -250,11 +253,18 @@ export const resetCardPin = async (req, res, next) => {
       });
     }
     
-    // Reset PIN and unlock card
-    card.pin = newPin;
-    card.unlockPin();
-    card.requiresPinChange = true; // Force user to change PIN on next use
-    await card.save();
+    // Use updateOne to reset PIN and unlock simultaneously
+    await RfidCard.updateOne(
+      { _id: cardId },
+      { 
+        pin: await bcrypt.hash(newPin, 12), // Hash the new PIN
+        pinAttempts: 0,
+        $unset: { pinLockedUntil: 1 },
+        status: card.status === 'PIN_LOCKED' ? 'ACTIVE' : card.status,
+        requiresPinChange: true,
+        lastPinChange: new Date()
+      }
+    );
     
     res.status(200).json({
       status: 'success',

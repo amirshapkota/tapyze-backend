@@ -90,7 +90,15 @@ rfidCardSchema.methods.verifyPin = async function(candidatePin) {
       this.pinLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
       this.status = 'PIN_LOCKED';
     }
-    await this.save();
+    // Use updateOne to avoid validation issues with hashed PIN
+    await this.constructor.updateOne(
+      { _id: this._id },
+      { 
+        pinAttempts: this.pinAttempts,
+        pinLockedUntil: this.pinLockedUntil,
+        status: this.status
+      }
+    );
     return false;
   }
   
@@ -101,7 +109,17 @@ rfidCardSchema.methods.verifyPin = async function(candidatePin) {
     this.status = 'ACTIVE';
   }
   this.lastUsed = new Date();
-  await this.save();
+  
+  // Use updateOne to avoid validation issues with hashed PIN
+  await this.constructor.updateOne(
+    { _id: this._id },
+    { 
+      pinAttempts: this.pinAttempts,
+      $unset: { pinLockedUntil: 1 },
+      status: this.status,
+      lastUsed: this.lastUsed
+    }
+  );
   
   return true;
 };
@@ -112,7 +130,18 @@ rfidCardSchema.methods.isPinLocked = function() {
 };
 
 // Instance method to unlock PIN (admin only)
-rfidCardSchema.methods.unlockPin = function() {
+rfidCardSchema.methods.unlockPin = async function() {
+  // Use updateOne to avoid validation issues
+  await this.constructor.updateOne(
+    { _id: this._id },
+    { 
+      pinAttempts: 0,
+      $unset: { pinLockedUntil: 1 },
+      status: this.status === 'PIN_LOCKED' ? 'ACTIVE' : this.status
+    }
+  );
+  
+  // Update the current instance
   this.pinAttempts = 0;
   this.pinLockedUntil = undefined;
   if (this.status === 'PIN_LOCKED') {
