@@ -3,11 +3,19 @@ import NfcScanner from '../models/NfcScanner.js';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
 
-// RFID Card Management
+// RFID Card Management with PIN
 export const assignCardToCustomer = async (req, res, next) => {
   try {
-    const { cardUid } = req.body;
+    const { cardUid, pin } = req.body;
     const customerId = req.params.customerId || req.user.id;
+    
+    // Validate PIN
+    if (!pin || !/^\d{4,6}$/.test(pin)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'PIN must be 4-6 digits'
+      });
+    }
     
     // Verify user type if admin is assigning to another user
     if (req.params.customerId && req.user.type !== 'Admin') {
@@ -45,10 +53,11 @@ export const assignCardToCustomer = async (req, res, next) => {
     const expiryDate = new Date();
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
     
-    // Create new RFID card record
+    // Create new RFID card record with PIN
     const newCard = await RfidCard.create({
       cardUid,
       owner: customerId,
+      pin,
       expiryDate,
       status: 'ACTIVE'
     });
@@ -62,7 +71,7 @@ export const assignCardToCustomer = async (req, res, next) => {
     
     res.status(201).json({
       status: 'success',
-      message: 'RFID card assigned successfully',
+      message: 'RFID card assigned successfully with PIN',
       data: {
         card: newCard
       }
@@ -72,6 +81,217 @@ export const assignCardToCustomer = async (req, res, next) => {
   }
 };
 
+// Verify PIN for transactions
+export const verifyCardPin = async (req, res, next) => {
+  try {
+    const { cardUid, pin } = req.body;
+    
+    if (!cardUid || !pin) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Card UID and PIN are required'
+      });
+    }
+    
+    // Find card and include PIN for verification
+    const card = await RfidCard.findOne({ cardUid }).select('+pin');
+    
+    if (!card) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Card not found'
+      });
+    }
+    
+    if (!card.isActive) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Card is not active'
+      });
+    }
+    
+    if (card.status === 'EXPIRED' || card.expiryDate < new Date()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Card has expired'
+      });
+    }
+    
+    try {
+      const isValidPin = await card.verifyPin(pin);
+      
+      if (!isValidPin) {
+        const remainingAttempts = 3 - card.pinAttempts;
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid PIN',
+          data: {
+            remainingAttempts: Math.max(0, remainingAttempts),
+            isLocked: card.isPinLocked()
+          }
+        });
+      }
+      
+      res.status(200).json({
+        status: 'success',
+        message: 'PIN verified successfully',
+        data: {
+          cardId: card._id,
+          owner: card.owner,
+          verified: true
+        }
+      });
+    } catch (pinError) {
+      return res.status(400).json({
+        status: 'error',
+        message: pinError.message
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Change card PIN
+export const changeCardPin = async (req, res, next) => {
+  try {
+    const { cardId } = req.params;
+    const { currentPin, newPin } = req.body;
+    const userId = req.user.id;
+    
+    if (!currentPin || !newPin) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Current PIN and new PIN are required'
+      });
+    }
+    
+    if (!/^\d{4,6}$/.test(newPin)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'New PIN must be 4-6 digits'
+      });
+    }
+    
+    if (currentPin === newPin) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'New PIN must be different from current PIN'
+      });
+    }
+    
+    // Find card with PIN
+    const card = await RfidCard.findById(cardId).select('+pin');
+    
+    if (!card) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Card not found'
+      });
+    }
+    
+    // Verify ownership
+    if (card.owner.toString() !== userId.toString() && req.user.type !== 'Admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'You do not have permission to change this card\'s PIN'
+      });
+    }
+    
+    // Verify current PIN
+    try {
+      const isValidCurrentPin = await card.verifyPin(currentPin);
+      if (!isValidCurrentPin) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Current PIN is incorrect'
+        });
+      }
+    } catch (pinError) {
+      return res.status(400).json({
+        status: 'error',
+        message: pinError.message
+      });
+    }
+    
+    // Update PIN
+    card.pin = newPin;
+    card.requiresPinChange = false;
+    await card.save();
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'PIN changed successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: Reset card PIN
+export const resetCardPin = async (req, res, next) => {
+  try {
+    const { cardId } = req.params;
+    const { newPin } = req.body;
+    
+    if (!newPin || !/^\d{4,6}$/.test(newPin)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'New PIN must be 4-6 digits'
+      });
+    }
+    
+    const card = await RfidCard.findById(cardId);
+    
+    if (!card) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Card not found'
+      });
+    }
+    
+    // Reset PIN and unlock card
+    card.pin = newPin;
+    card.unlockPin();
+    card.requiresPinChange = true; // Force user to change PIN on next use
+    await card.save();
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'PIN reset successfully. User must change PIN on next use.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: Unlock card PIN
+export const unlockCardPin = async (req, res, next) => {
+  try {
+    const { cardId } = req.params;
+    
+    const card = await RfidCard.findById(cardId);
+    
+    if (!card) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Card not found'
+      });
+    }
+    
+    card.unlockPin();
+    await card.save();
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Card PIN unlocked successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get customer cards (existing function - no changes needed)
 export const getCustomerCards = async (req, res, next) => {
   try {
     const customerId = req.params.customerId || req.user.id;
@@ -100,7 +320,7 @@ export const getCustomerCards = async (req, res, next) => {
   }
 };
 
-// In deviceController.js
+// Deactivate card (existing function - no changes needed)
 export const deactivateCard = async (req, res, next) => {
   try {
     const { cardId } = req.params;
@@ -131,7 +351,7 @@ export const deactivateCard = async (req, res, next) => {
     card.isActive = false;
     card.status = req.body.reason === 'LOST' ? 'LOST' : 'INACTIVE';
     
-    // Track who deactivated the card (if your model has these fields)
+    // Track who deactivated the card
     card.deactivatedAt = new Date();
     card.deactivatedBy = userId;
     
@@ -150,13 +370,12 @@ export const deactivateCard = async (req, res, next) => {
   }
 };
 
-// NFC Scanner Management
+// NFC Scanner Management (existing functions - no changes needed)
 export const assignScannerToMerchant = async (req, res, next) => {
   try {
     const { deviceId, model, firmwareVersion } = req.body;
     const merchantId = req.params.merchantId || req.user.id;
     
-    // Verify user type if admin is assigning to another merchant
     if (req.params.merchantId && req.user.type !== 'Admin') {
       return res.status(403).json({
         status: 'error',
@@ -164,7 +383,6 @@ export const assignScannerToMerchant = async (req, res, next) => {
       });
     }
     
-    // Check if merchant exists
     const merchant = await Merchant.findById(merchantId);
     if (!merchant) {
       return res.status(404).json({
@@ -173,7 +391,6 @@ export const assignScannerToMerchant = async (req, res, next) => {
       });
     }
     
-    // Check if scanner is already assigned
     const existingScanner = await NfcScanner.findOne({ deviceId });
     if (existingScanner) {
       return res.status(400).json({
@@ -182,7 +399,6 @@ export const assignScannerToMerchant = async (req, res, next) => {
       });
     }
     
-    // Create new NFC scanner record
     const newScanner = await NfcScanner.create({
       deviceId,
       owner: merchantId,
@@ -208,7 +424,6 @@ export const getMerchantScanners = async (req, res, next) => {
   try {
     const merchantId = req.params.merchantId || req.user.id;
     
-    // Verify user permissions
     if (req.params.merchantId && req.user.type !== 'Admin' && req.user.id.toString() !== req.params.merchantId) {
       return res.status(403).json({
         status: 'error',
@@ -232,7 +447,6 @@ export const getMerchantScanners = async (req, res, next) => {
   }
 };
 
-// In deviceController.js
 export const updateScannerStatus = async (req, res, next) => {
   try {
     const { scannerId } = req.params;
@@ -249,7 +463,6 @@ export const updateScannerStatus = async (req, res, next) => {
       });
     }
     
-    // Check if user is the owner or an admin
     const isOwner = scanner.owner.toString() === userId.toString();
     const isAdmin = userType === 'Admin';
     
@@ -260,7 +473,6 @@ export const updateScannerStatus = async (req, res, next) => {
       });
     }
     
-    // Validate status if provided
     if (status) {
       const validStatuses = ['ONLINE', 'OFFLINE', 'MAINTENANCE', 'PENDING_ACTIVATION'];
       if (!validStatuses.includes(status)) {
@@ -272,14 +484,11 @@ export const updateScannerStatus = async (req, res, next) => {
       scanner.status = status;
     }
     
-    // Update firmware version if provided
     if (firmwareVersion) {
       scanner.firmwareVersion = firmwareVersion;
     }
     
-    // Track last connection
     scanner.lastConnected = new Date();
-    
     await scanner.save();
     
     res.status(200).json({
@@ -295,16 +504,12 @@ export const updateScannerStatus = async (req, res, next) => {
   }
 };
 
-
-// Get all cards in the system (admin only)
 export const getAllCards = async (req, res, next) => {
   try {
-    // Pagination
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     
-    // Filters
     const filters = {};
     
     if (req.query.status) {
@@ -317,14 +522,12 @@ export const getAllCards = async (req, res, next) => {
       filters.isActive = false;
     }
     
-    // Get cards with pagination and populate owner
     const cards = await RfidCard.find(filters)
       .populate('owner', 'fullName email phone')
       .sort({ issuedAt: -1 })
       .skip(skip)
       .limit(limit);
     
-    // Get total count
     const total = await RfidCard.countDocuments(filters);
     
     res.status(200).json({
@@ -345,15 +548,12 @@ export const getAllCards = async (req, res, next) => {
   }
 };
 
-// Get all scanners in the system (admin only)
 export const getAllScanners = async (req, res, next) => {
   try {
-    // Pagination
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     
-    // Filters
     const filters = {};
     
     if (req.query.status) {
@@ -366,14 +566,12 @@ export const getAllScanners = async (req, res, next) => {
       filters.isActive = false;
     }
     
-    // Get scanners with pagination and populate owner
     const scanners = await NfcScanner.find(filters)
       .populate('owner', 'businessName ownerName email')
       .sort({ registeredAt: -1 })
       .skip(skip)
       .limit(limit);
     
-    // Get total count
     const total = await NfcScanner.countDocuments(filters);
     
     res.status(200).json({
