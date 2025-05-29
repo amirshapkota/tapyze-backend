@@ -90,7 +90,18 @@ Auth: Bearer Token
 
 ```
 {
-  "cardUid": "RFID12345678"
+  "cardUid": "RF001234567890",
+  "pin": "1234"
+}
+```
+
+{{baseUrl}}/api/devices/cards/verify-pin (POST)
+Authorization: Bearer {{customerToken}}
+
+```
+{
+  "cardUid": "RF001234567890",
+  "pin": "1234"
 }
 ```
 
