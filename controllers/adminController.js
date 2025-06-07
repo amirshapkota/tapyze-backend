@@ -2,6 +2,9 @@ import Admin from '../models/Admin.js';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
 import Transaction from '../models/Transaction.js';
+import Wallet from '../models/Wallet.js';
+import RfidCard from '../models/RfidCard.js';
+import NfcScanner from '../models/NfcScanner.js';
 
 // Get all admins (admin-only)
 export const getAllAdmins = async (req, res, next) => {
