@@ -139,13 +139,56 @@ export const deactivateAdmin = async (req, res, next) => {
 // Get all customers (admin-only)
 export const getAllCustomers = async (req, res, next) => {
   try {
-    const customers = await Customer.find().sort({ createdAt: -1 });
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    // Get customers
+    const customers = await Customer.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    
+    // Get total count for pagination
+    const total = await Customer.countDocuments();
+    
+    // Populate wallet and RFID card data for each customer
+    const customersWithDetails = await Promise.all(
+      customers.map(async (customer) => {
+        // Get wallet data
+        const wallet = await Wallet.findOne({
+          owner: customer._id,
+          ownerType: 'Customer'
+        });
+        
+        // Get RFID cards
+        const rfidCards = await RfidCard.find({
+          owner: customer._id
+        }).select('cardUid status isActive');
+        
+        return {
+          ...customer.toObject(),
+          wallet: wallet ? {
+            balance: wallet.balance,
+            currency: wallet.currency
+          } : null,
+          rfidCards: rfidCards || []
+        };
+      })
+    );
     
     res.status(200).json({
       status: 'success',
-      results: customers.length,
+      results: customersWithDetails.length,
       data: {
-        customers
+        customers: customersWithDetails,
+        pagination: {
+          total,
+          page,
+          pages: Math.ceil(total / limit),
+          limit
+        }
       }
     });
   } catch (error) {
@@ -156,13 +199,56 @@ export const getAllCustomers = async (req, res, next) => {
 // Get all merchants (admin-only)
 export const getAllMerchants = async (req, res, next) => {
   try {
-    const merchants = await Merchant.find().sort({ createdAt: -1 });
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    // Get merchants
+    const merchants = await Merchant.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    
+    // Get total count for pagination
+    const total = await Merchant.countDocuments();
+    
+    // Populate wallet and NFC scanner data for each merchant
+    const merchantsWithDetails = await Promise.all(
+      merchants.map(async (merchant) => {
+        // Get wallet data
+        const wallet = await Wallet.findOne({
+          owner: merchant._id,
+          ownerType: 'Merchant'
+        });
+        
+        // Get NFC scanners
+        const nfcScanners = await NfcScanner.find({
+          owner: merchant._id
+        }).select('deviceId status isActive model');
+        
+        return {
+          ...merchant.toObject(),
+          wallet: wallet ? {
+            balance: wallet.balance,
+            currency: wallet.currency
+          } : null,
+          nfcScanners: nfcScanners || []
+        };
+      })
+    );
     
     res.status(200).json({
       status: 'success',
-      results: merchants.length,
+      results: merchantsWithDetails.length,
       data: {
-        merchants
+        merchants: merchantsWithDetails,
+        pagination: {
+          total,
+          page,
+          pages: Math.ceil(total / limit),
+          limit
+        }
       }
     });
   } catch (error) {
