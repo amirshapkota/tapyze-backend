@@ -102,6 +102,9 @@ export const processRfidPayment = async (req, res, next) => {
     try {
       const isValidPin = await card.verifyPin(pin);
       if (!isValidPin) {
+        // Save the card to persist PIN attempt changes
+        await card.save({ session });
+        
         await session.abortTransaction();
         session.endSession();
         
@@ -115,6 +118,8 @@ export const processRfidPayment = async (req, res, next) => {
           }
         });
       }
+      // Save the card after successful PIN verification
+      await card.save({ session });
     } catch (pinError) {
       await session.abortTransaction();
       session.endSession();

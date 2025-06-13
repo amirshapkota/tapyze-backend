@@ -14,13 +14,21 @@ const rfidCardSchema = new mongoose.Schema({
     required: true
   },
   pin: {
-    type: String,
-    required: [true, 'PIN is required'],
-    minlength: [4, 'PIN must be at least 4 digits'],
-    maxlength: [6, 'PIN cannot exceed 6 digits'],
-    match: [/^\d{4,6}$/, 'PIN must contain only digits'],
-    select: false // Don't include PIN in queries by default
+  type: String,
+  required: [true, 'PIN is required'],
+  validate: {
+    validator: function(value) {
+      // Skip validation for hashed PINs (they start with $2a$ or $2b$)
+      if (value && value.startsWith('$2')) {
+        return true;
+      }
+      // Only validate raw PINs - must be exactly 4 digits
+      return /^\d{4}$/.test(value);
+    },
+    message: 'PIN must be exactly 4 digits'
   },
+  select: false // Don't include PIN in queries by default
+},
   pinAttempts: {
     type: Number,
     default: 0,
@@ -90,15 +98,6 @@ rfidCardSchema.methods.verifyPin = async function(candidatePin) {
       this.pinLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
       this.status = 'PIN_LOCKED';
     }
-    // Use updateOne to avoid validation issues with hashed PIN
-    await this.constructor.updateOne(
-      { _id: this._id },
-      { 
-        pinAttempts: this.pinAttempts,
-        pinLockedUntil: this.pinLockedUntil,
-        status: this.status
-      }
-    );
     return false;
   }
   
@@ -109,17 +108,6 @@ rfidCardSchema.methods.verifyPin = async function(candidatePin) {
     this.status = 'ACTIVE';
   }
   this.lastUsed = new Date();
-  
-  // Use updateOne to avoid validation issues with hashed PIN
-  await this.constructor.updateOne(
-    { _id: this._id },
-    { 
-      pinAttempts: this.pinAttempts,
-      $unset: { pinLockedUntil: 1 },
-      status: this.status,
-      lastUsed: this.lastUsed
-    }
-  );
   
   return true;
 };
