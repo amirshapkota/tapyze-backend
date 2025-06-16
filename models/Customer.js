@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const customerSchema = new mongoose.Schema({
   fullName: {
@@ -7,7 +8,6 @@ const customerSchema = new mongoose.Schema({
     required: [true, 'Full name is required'],
     trim: true
   },
-  
   email: {
     type: String,
     required: [true, 'Email is required'],
@@ -16,27 +16,25 @@ const customerSchema = new mongoose.Schema({
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
   },
-  
   phone: {
     type: String,
     required: [true, 'Phone number is required'],
     unique: true,
     match: [/^[0-9]{10,15}$/, 'Please provide a valid phone number']
   },
-  
   gender: {
     type: String,
     required: [true, 'Gender is required'],
     enum: ['Male', 'Female', 'Other']
   },
-  
   password: {
     type: String,
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters'],
     select: false
   },
-  
+  passwordResetToken: String,
+  passwordResetExpires: Date,
   createdAt: {
     type: Date,
     default: Date.now
@@ -45,8 +43,10 @@ const customerSchema = new mongoose.Schema({
 
 // Hash password before saving
 customerSchema.pre('save', async function(next) {
+  // Only run this function if password was actually modified
   if (!this.isModified('password')) return next();
   
+  // Hash the password with cost of 12
   this.password = await bcrypt.hash(this.password, parseInt(process.env.BCRYPT_ROUNDS) || 12);
   next();
 });
@@ -56,13 +56,29 @@ customerSchema.methods.correctPassword = async function(candidatePassword, userP
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
+// Instance method to create password reset token
+customerSchema.methods.createPasswordResetToken = function() {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  
+  this.passwordResetToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  
+  // Token expires in 10 minutes
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+  
+  return resetToken;
+};
+
 // Remove password from JSON response
 customerSchema.methods.toJSON = function() {
   const obj = this.toObject();
   delete obj.password;
+  delete obj.passwordResetToken;
+  delete obj.passwordResetExpires;
   return obj;
 };
 
 const Customer = mongoose.model('Customer', customerSchema);
-
 export default Customer;
