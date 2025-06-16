@@ -4,7 +4,7 @@ import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
 import Wallet from '../models/Wallet.js';
 import Admin from '../models/Admin.js';
-import { sendEmail } from '../utils/email.js';
+import { sendEmail } from '../utils/email.js'; // You'll need to create this utility
 
 // Helper function to create JWT
 const signToken = (id, type) => {
@@ -382,35 +382,13 @@ export const customerForgotPassword = async (req, res, next) => {
     const resetCode = customer.createPasswordResetCode();
     await customer.save({ validateBeforeSave: false });
     
-    // Send it to customer's email
+    // Send it to customer's email using template
     try {
       await sendEmail({
         email: customer.email,
-        subject: 'Your Password Reset Code - Tapyze',
-        message: `Your password reset code is: ${resetCode}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
-            <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-              <h2 style="color: #333; text-align: center; margin-bottom: 30px;">🔐 Password Reset Code</h2>
-              
-              <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello ${customer.fullName},</p>
-              
-              <p style="color: #555; font-size: 16px; line-height: 1.6;">You requested to reset your password. Use the code below:</p>
-              
-              <div style="background-color: #f0f8ff; border: 2px dashed #007bff; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
-                <h1 style="color: #007bff; font-size: 32px; letter-spacing: 4px; margin: 0; font-family: 'Courier New', monospace;">${resetCode}</h1>
-              </div>
-              
-              <p style="color: #555; font-size: 14px; line-height: 1.6;">⏰ <strong>This code will expire in 10 minutes</strong></p>
-              
-              <p style="color: #555; font-size: 14px; line-height: 1.6;">If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
-              
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-              
-              <p style="color: #888; font-size: 12px; text-align: center;">Tapyze - Secure Digital Payments</p>
-            </div>
-          </div>
-        `
+        template: 'passwordReset',
+        name: customer.fullName,
+        code: resetCode
       });
       
       res.status(200).json({
@@ -509,35 +487,14 @@ export const merchantForgotPassword = async (req, res, next) => {
     const resetCode = merchant.createPasswordResetCode();
     await merchant.save({ validateBeforeSave: false });
     
-    // Send it to merchant's email
+    // Send it to merchant's email using template
     try {
       await sendEmail({
         email: merchant.email,
-        subject: 'Your Password Reset Code - Tapyze',
-        message: `Your password reset code is: ${resetCode}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
-            <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-              <h2 style="color: #333; text-align: center; margin-bottom: 30px;">🔐 Password Reset Code</h2>
-              
-              <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello ${merchant.ownerName},</p>
-              
-              <p style="color: #555; font-size: 16px; line-height: 1.6;">You requested to reset your password for <strong>${merchant.businessName}</strong>. Use the code below:</p>
-              
-              <div style="background-color: #f0f8ff; border: 2px dashed #007bff; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
-                <h1 style="color: #007bff; font-size: 32px; letter-spacing: 4px; margin: 0; font-family: 'Courier New', monospace;">${resetCode}</h1>
-              </div>
-              
-              <p style="color: #555; font-size: 14px; line-height: 1.6;">⏰ <strong>This code will expire in 10 minutes</strong></p>
-              
-              <p style="color: #555; font-size: 14px; line-height: 1.6;">If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
-              
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-              
-              <p style="color: #888; font-size: 12px; text-align: center;">Tapyze - Secure Digital Payments</p>
-            </div>
-          </div>
-        `
+        template: 'merchantPasswordReset',
+        ownerName: merchant.ownerName,
+        businessName: merchant.businessName,
+        code: resetCode
       });
       
       res.status(200).json({
