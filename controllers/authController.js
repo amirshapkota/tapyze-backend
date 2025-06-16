@@ -410,6 +410,50 @@ export const customerForgotPassword = async (req, res, next) => {
   }
 };
 
+// VERIFY RESET CODE - CUSTOMER
+export const customerVerifyResetCode = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide the reset code'
+      });
+    }
+    
+    // Hash the provided code to compare with stored hash
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+    
+    // Find customer with matching code and valid expiry
+    const customer = await Customer.findOne({
+      passwordResetCode: hashedCode,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+    
+    if (!customer) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Reset code is invalid or has expired'
+      });
+    }
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Reset code verified successfully',
+      data: {
+        email: customer.email,
+        verified: true
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // VERIFY RESET CODE & RESET PASSWORD - CUSTOMER
 export const customerResetPassword = async (req, res, next) => {
   try {
@@ -511,6 +555,50 @@ export const merchantForgotPassword = async (req, res, next) => {
         message: 'There was an error sending the email. Try again later.'
       });
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// VERIFY RESET CODE - MERCHANT
+export const merchantVerifyResetCode = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide the reset code'
+      });
+    }
+    
+    // Hash the provided code to compare with stored hash
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+    
+    // Find merchant with matching code and valid expiry
+    const merchant = await Merchant.findOne({
+      passwordResetCode: hashedCode,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+    
+    if (!merchant) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Reset code is invalid or has expired'
+      });
+    }
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Reset code verified successfully',
+      data: {
+        email: merchant.email,
+        verified: true
+      }
+    });
   } catch (error) {
     next(error);
   }
