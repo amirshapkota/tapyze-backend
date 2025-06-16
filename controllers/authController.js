@@ -1,8 +1,10 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
 import Wallet from '../models/Wallet.js';
 import Admin from '../models/Admin.js';
+import { sendEmail } from '../utils/email.js'; // You'll need to create this utility
 
 // Helper function to create JWT
 const signToken = (id, type) => {
@@ -347,6 +349,428 @@ export const createAdmin = async (req, res, next) => {
       message: 'Admin account created successfully',
       data: {
         admin
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// FORGOT PASSWORD - CUSTOMER
+export const customerForgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide your email address'
+      });
+    }
+    
+    // Get customer based on email
+    const customer = await Customer.findOne({ email });
+    
+    if (!customer) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No customer found with that email address'
+      });
+    }
+    
+    // Generate the random reset token
+    const resetToken = customer.createPasswordResetToken();
+    await customer.save({ validateBeforeSave: false });
+    
+    // Send it to customer's email
+    try {
+      const resetURL = `${req.protocol}://${req.get('host')}/api/auth/customer/reset-password/${resetToken}`;
+      
+      await sendEmail({
+        email: customer.email,
+        subject: 'Your password reset token (valid for 10 min)',
+        message: `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`
+      });
+      
+      res.status(200).json({
+        status: 'success',
+        message: 'Token sent to email!'
+      });
+    } catch (err) {
+      customer.passwordResetToken = undefined;
+      customer.passwordResetExpires = undefined;
+      await customer.save({ validateBeforeSave: false });
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'There was an error sending the email. Try again later.'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// RESET PASSWORD - CUSTOMER
+export const customerResetPassword = async (req, res, next) => {
+  try {
+    // Get customer based on the token
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(req.params.token)
+      .digest('hex');
+    
+    const customer = await Customer.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+    
+    // If token has not expired, and there is customer, set the new password
+    if (!customer) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Token is invalid or has expired'
+      });
+    }
+    
+    const { password, confirmPassword } = req.body;
+    
+    if (!password || !confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide password and confirm password'
+      });
+    }
+    
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Passwords do not match'
+      });
+    }
+    
+    customer.password = password;
+    customer.passwordResetToken = undefined;
+    customer.passwordResetExpires = undefined;
+    await customer.save();
+    
+    // Log the customer in, send JWT
+    createSendToken(customer, 200, res, 'Password reset successful');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// FORGOT PASSWORD - MERCHANT
+export const merchantForgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide your email address'
+      });
+    }
+    
+    // Get merchant based on email
+    const merchant = await Merchant.findOne({ email });
+    
+    if (!merchant) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'No merchant found with that email address'
+      });
+    }
+    
+    // Generate the random reset token
+    const resetToken = merchant.createPasswordResetToken();
+    await merchant.save({ validateBeforeSave: false });
+    
+    // Send it to merchant's email
+    try {
+      const resetURL = `${req.protocol}://${req.get('host')}/api/auth/merchant/reset-password/${resetToken}`;
+      
+      await sendEmail({
+        email: merchant.email,
+        subject: 'Your password reset token (valid for 10 min)',
+        message: `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`
+      });
+      
+      res.status(200).json({
+        status: 'success',
+        message: 'Token sent to email!'
+      });
+    } catch (err) {
+      merchant.passwordResetToken = undefined;
+      merchant.passwordResetExpires = undefined;
+      await merchant.save({ validateBeforeSave: false });
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'There was an error sending the email. Try again later.'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// RESET PASSWORD - MERCHANT
+export const merchantResetPassword = async (req, res, next) => {
+  try {
+    // Get merchant based on the token
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(req.params.token)
+      .digest('hex');
+    
+    const merchant = await Merchant.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+    
+    // If token has not expired, and there is merchant, set the new password
+    if (!merchant) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Token is invalid or has expired'
+      });
+    }
+    
+    const { password, confirmPassword } = req.body;
+    
+    if (!password || !confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide password and confirm password'
+      });
+    }
+    
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Passwords do not match'
+      });
+    }
+    
+    merchant.password = password;
+    merchant.passwordResetToken = undefined;
+    merchant.passwordResetExpires = undefined;
+    await merchant.save();
+    
+    // Log the merchant in, send JWT
+    createSendToken(merchant, 200, res, 'Password reset successful');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// CHANGE PASSWORD - CUSTOMER
+export const customerChangePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+    
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide current password, new password and confirm new password'
+      });
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'New passwords do not match'
+      });
+    }
+    
+    // Get customer from collection
+    const customer = await Customer.findById(req.user.id).select('+password');
+    
+    // Check if current password is correct
+    if (!(await customer.correctPassword(currentPassword, customer.password))) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Your current password is incorrect'
+      });
+    }
+    
+    // Update password
+    customer.password = newPassword;
+    await customer.save();
+    
+    // Log customer in, send JWT
+    createSendToken(customer, 200, res, 'Password changed successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// CHANGE PASSWORD - MERCHANT
+export const merchantChangePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+    
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide current password, new password and confirm new password'
+      });
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'New passwords do not match'
+      });
+    }
+    
+    // Get merchant from collection
+    const merchant = await Merchant.findById(req.user.id).select('+password');
+    
+    // Check if current password is correct
+    if (!(await merchant.correctPassword(currentPassword, merchant.password))) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Your current password is incorrect'
+      });
+    }
+    
+    // Update password
+    merchant.password = newPassword;
+    await merchant.save();
+    
+    // Log merchant in, send JWT
+    createSendToken(merchant, 200, res, 'Password changed successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// EDIT PROFILE - CUSTOMER
+export const customerEditProfile = async (req, res, next) => {
+  try {
+    const { fullName, phone, gender } = req.body;
+    
+    // Build update object with only provided fields
+    const updateData = {};
+    if (fullName) updateData.fullName = fullName;
+    if (phone) updateData.phone = phone;
+    if (gender) updateData.gender = gender;
+    
+    // Check if phone is being updated and already exists
+    if (phone) {
+      const existingCustomer = await Customer.findOne({ 
+        phone, 
+        _id: { $ne: req.user.id } 
+      });
+      
+      if (existingCustomer) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Phone number already exists'
+        });
+      }
+    }
+    
+    // Update customer
+    const customer = await Customer.findByIdAndUpdate(
+      req.user.id,
+      updateData,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Profile updated successfully',
+      data: {
+        customer
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// EDIT PROFILE - MERCHANT
+export const merchantEditProfile = async (req, res, next) => {
+  try {
+    const { businessName, ownerName, phone, businessAddress, businessType } = req.body;
+    
+    // Build update object with only provided fields
+    const updateData = {};
+    if (businessName) updateData.businessName = businessName;
+    if (ownerName) updateData.ownerName = ownerName;
+    if (phone) updateData.phone = phone;
+    if (businessAddress) updateData.businessAddress = businessAddress;
+    if (businessType) updateData.businessType = businessType;
+    
+    // Check if phone is being updated and already exists
+    if (phone) {
+      const existingMerchant = await Merchant.findOne({ 
+        phone, 
+        _id: { $ne: req.user.id } 
+      });
+      
+      if (existingMerchant) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Phone number already exists'
+        });
+      }
+    }
+    
+    // Update merchant
+    const merchant = await Merchant.findByIdAndUpdate(
+      req.user.id,
+      updateData,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Profile updated successfully',
+      data: {
+        merchant
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET PROFILE - CUSTOMER
+export const getCustomerProfile = async (req, res, next) => {
+  try {
+    const customer = await Customer.findById(req.user.id);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        customer
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET PROFILE - MERCHANT
+export const getMerchantProfile = async (req, res, next) => {
+  try {
+    const merchant = await Merchant.findById(req.user.id);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        merchant
       }
     });
   } catch (error) {
