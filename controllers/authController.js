@@ -378,26 +378,47 @@ export const customerForgotPassword = async (req, res, next) => {
       });
     }
     
-    // Generate the random reset token
-    const resetToken = customer.createPasswordResetToken();
+    // Generate the random reset code
+    const resetCode = customer.createPasswordResetCode();
     await customer.save({ validateBeforeSave: false });
     
     // Send it to customer's email
     try {
-      const resetURL = `${req.protocol}://${req.get('host')}/api/auth/customer/reset-password/${resetToken}`;
-      
       await sendEmail({
         email: customer.email,
-        subject: 'Your password reset token (valid for 10 min)',
-        message: `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`
+        subject: 'Your Password Reset Code - Tapyze',
+        message: `Your password reset code is: ${resetCode}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
+            <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <h2 style="color: #333; text-align: center; margin-bottom: 30px;">🔐 Password Reset Code</h2>
+              
+              <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello ${customer.fullName},</p>
+              
+              <p style="color: #555; font-size: 16px; line-height: 1.6;">You requested to reset your password. Use the code below:</p>
+              
+              <div style="background-color: #f0f8ff; border: 2px dashed #007bff; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                <h1 style="color: #007bff; font-size: 32px; letter-spacing: 4px; margin: 0; font-family: 'Courier New', monospace;">${resetCode}</h1>
+              </div>
+              
+              <p style="color: #555; font-size: 14px; line-height: 1.6;">⏰ <strong>This code will expire in 10 minutes</strong></p>
+              
+              <p style="color: #555; font-size: 14px; line-height: 1.6;">If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+              
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+              
+              <p style="color: #888; font-size: 12px; text-align: center;">Tapyze - Secure Digital Payments</p>
+            </div>
+          </div>
+        `
       });
       
       res.status(200).json({
         status: 'success',
-        message: 'Token sent to email!'
+        message: 'Reset code sent to your email!'
       });
     } catch (err) {
-      customer.passwordResetToken = undefined;
+      customer.passwordResetCode = undefined;
       customer.passwordResetExpires = undefined;
       await customer.save({ validateBeforeSave: false });
       
@@ -411,34 +432,15 @@ export const customerForgotPassword = async (req, res, next) => {
   }
 };
 
-// RESET PASSWORD - CUSTOMER
+// VERIFY RESET CODE & RESET PASSWORD - CUSTOMER
 export const customerResetPassword = async (req, res, next) => {
   try {
-    // Get customer based on the token
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(req.params.token)
-      .digest('hex');
+    const { code, password, confirmPassword } = req.body;
     
-    const customer = await Customer.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() }
-    });
-    
-    // If token has not expired, and there is customer, set the new password
-    if (!customer) {
+    if (!code || !password || !confirmPassword) {
       return res.status(400).json({
         status: 'error',
-        message: 'Token is invalid or has expired'
-      });
-    }
-    
-    const { password, confirmPassword } = req.body;
-    
-    if (!password || !confirmPassword) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Please provide password and confirm password'
+        message: 'Please provide reset code, password and confirm password'
       });
     }
     
@@ -449,8 +451,28 @@ export const customerResetPassword = async (req, res, next) => {
       });
     }
     
+    // Hash the provided code to compare with stored hash
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+    
+    // Find customer with matching code and valid expiry
+    const customer = await Customer.findOne({
+      passwordResetCode: hashedCode,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+    
+    if (!customer) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Reset code is invalid or has expired'
+      });
+    }
+    
+    // Set new password and clear reset fields
     customer.password = password;
-    customer.passwordResetToken = undefined;
+    customer.passwordResetCode = undefined;
     customer.passwordResetExpires = undefined;
     await customer.save();
     
@@ -483,26 +505,47 @@ export const merchantForgotPassword = async (req, res, next) => {
       });
     }
     
-    // Generate the random reset token
-    const resetToken = merchant.createPasswordResetToken();
+    // Generate the random reset code
+    const resetCode = merchant.createPasswordResetCode();
     await merchant.save({ validateBeforeSave: false });
     
     // Send it to merchant's email
     try {
-      const resetURL = `${req.protocol}://${req.get('host')}/api/auth/merchant/reset-password/${resetToken}`;
-      
       await sendEmail({
         email: merchant.email,
-        subject: 'Your password reset token (valid for 10 min)',
-        message: `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`
+        subject: 'Your Password Reset Code - Tapyze',
+        message: `Your password reset code is: ${resetCode}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
+            <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <h2 style="color: #333; text-align: center; margin-bottom: 30px;">🔐 Password Reset Code</h2>
+              
+              <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello ${merchant.ownerName},</p>
+              
+              <p style="color: #555; font-size: 16px; line-height: 1.6;">You requested to reset your password for <strong>${merchant.businessName}</strong>. Use the code below:</p>
+              
+              <div style="background-color: #f0f8ff; border: 2px dashed #007bff; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                <h1 style="color: #007bff; font-size: 32px; letter-spacing: 4px; margin: 0; font-family: 'Courier New', monospace;">${resetCode}</h1>
+              </div>
+              
+              <p style="color: #555; font-size: 14px; line-height: 1.6;">⏰ <strong>This code will expire in 10 minutes</strong></p>
+              
+              <p style="color: #555; font-size: 14px; line-height: 1.6;">If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+              
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+              
+              <p style="color: #888; font-size: 12px; text-align: center;">Tapyze - Secure Digital Payments</p>
+            </div>
+          </div>
+        `
       });
       
       res.status(200).json({
         status: 'success',
-        message: 'Token sent to email!'
+        message: 'Reset code sent to your email!'
       });
     } catch (err) {
-      merchant.passwordResetToken = undefined;
+      merchant.passwordResetCode = undefined;
       merchant.passwordResetExpires = undefined;
       await merchant.save({ validateBeforeSave: false });
       
@@ -516,34 +559,15 @@ export const merchantForgotPassword = async (req, res, next) => {
   }
 };
 
-// RESET PASSWORD - MERCHANT
+// VERIFY RESET CODE & RESET PASSWORD - MERCHANT
 export const merchantResetPassword = async (req, res, next) => {
   try {
-    // Get merchant based on the token
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(req.params.token)
-      .digest('hex');
+    const { code, password, confirmPassword } = req.body;
     
-    const merchant = await Merchant.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() }
-    });
-    
-    // If token has not expired, and there is merchant, set the new password
-    if (!merchant) {
+    if (!code || !password || !confirmPassword) {
       return res.status(400).json({
         status: 'error',
-        message: 'Token is invalid or has expired'
-      });
-    }
-    
-    const { password, confirmPassword } = req.body;
-    
-    if (!password || !confirmPassword) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Please provide password and confirm password'
+        message: 'Please provide reset code, password and confirm password'
       });
     }
     
@@ -554,8 +578,28 @@ export const merchantResetPassword = async (req, res, next) => {
       });
     }
     
+    // Hash the provided code to compare with stored hash
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+    
+    // Find merchant with matching code and valid expiry
+    const merchant = await Merchant.findOne({
+      passwordResetCode: hashedCode,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+    
+    if (!merchant) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Reset code is invalid or has expired'
+      });
+    }
+    
+    // Set new password and clear reset fields
     merchant.password = password;
-    merchant.passwordResetToken = undefined;
+    merchant.passwordResetCode = undefined;
     merchant.passwordResetExpires = undefined;
     await merchant.save();
     
