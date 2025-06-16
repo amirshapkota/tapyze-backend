@@ -52,6 +52,62 @@ baseUrl: http://localhost:5000/api
 }
 ```
 
+PATCH /api/auth/customer/change-password
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+
+```
+{
+  "currentPassword": "oldpassword",
+  "newPassword": "newpassword123",
+  "confirmNewPassword": "newpassword123"
+}
+```
+
+GET /api/auth/customer/profile
+Authorization: Bearer {jwt-token}
+
+PATCH /api/auth/customer/profile
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+
+```
+{
+  "fullName": "Updated Name",
+  "phone": "1234567890",
+  "gender": "Male"
+}
+```
+
+PATCH /api/auth/merchant/change-password
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+
+```
+{
+  "currentPassword": "oldpassword",
+  "newPassword": "newpassword123",
+  "confirmNewPassword": "newpassword123"
+}
+```
+
+GET /api/auth/merchant/profile
+Authorization: Bearer {jwt-token}
+
+PATCH /api/auth/merchant/profile
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+
+```
+{
+  "businessName": "Updated Business Name",
+  "ownerName": "Updated Owner Name",
+  "phone": "1234567890",
+  "businessAddress": "Updated Address",
+  "businessType": "Updated Type"
+}
+```
+
 ## Wallet Requests
 
 {{baseUrl}}/wallet/balance (GET)
