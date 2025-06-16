@@ -7,12 +7,14 @@ import {
   adminLogin,
   setupFirstAdmin,
   createAdmin,
+  // New password management routes
   customerForgotPassword,
   customerResetPassword,
   merchantForgotPassword,
   merchantResetPassword,
   customerChangePassword,
   merchantChangePassword,
+  // New profile management routes
   customerEditProfile,
   merchantEditProfile,
   getCustomerProfile,
@@ -26,7 +28,7 @@ const router = express.Router();
 router.post('/customer/signup', customerSignup);
 router.post('/customer/login', customerLogin);
 router.post('/customer/forgot-password', customerForgotPassword);
-router.patch('/customer/reset-password/:token', customerResetPassword);
+router.post('/customer/reset-password', customerResetPassword); // Changed from PATCH to POST and removed :token
 
 // Protected customer routes
 router.patch('/customer/change-password', protect, customerOnly, customerChangePassword);
@@ -37,7 +39,7 @@ router.patch('/customer/profile', protect, customerOnly, customerEditProfile);
 router.post('/merchant/signup', merchantSignup);
 router.post('/merchant/login', merchantLogin);
 router.post('/merchant/forgot-password', merchantForgotPassword);
-router.patch('/merchant/reset-password/:token', merchantResetPassword);
+router.post('/merchant/reset-password', merchantResetPassword); // Changed from PATCH to POST and removed :token
 
 // Protected merchant routes
 router.patch('/merchant/change-password', protect, merchantOnly, merchantChangePassword);
