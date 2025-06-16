@@ -108,6 +108,46 @@ Content-Type: application/json
 }
 ```
 
+### Forgot Password
+
+POST /api/auth/customer/forgot-password
+Content-Type: application/json
+
+```
+{
+  "email": "customer@example.com"
+}
+```
+
+PATCH /api/auth/customer/reset-password/{reset-token}
+Content-Type: application/json
+
+```
+{
+  "password": "newpassword123",
+  "confirmPassword": "newpassword123"
+}
+```
+
+POST /api/auth/merchant/forgot-password
+Content-Type: application/json
+
+```
+{
+  "email": "merchant@example.com"
+}
+```
+
+PATCH /api/auth/merchant/reset-password/{reset-token}
+Content-Type: application/json
+
+```
+{
+  "password": "newpassword123",
+  "confirmPassword": "newpassword123"
+}
+```
+
 ## Wallet Requests
 
 {{baseUrl}}/wallet/balance (GET)

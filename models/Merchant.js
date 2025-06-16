@@ -43,7 +43,7 @@ const merchantSchema = new mongoose.Schema({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false
   },
-  passwordResetToken: String,
+  passwordResetCode: String,
   passwordResetExpires: Date,
   createdAt: {
     type: Date,
@@ -66,26 +66,28 @@ merchantSchema.methods.correctPassword = async function(candidatePassword, userP
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
-// Instance method to create password reset token
-merchantSchema.methods.createPasswordResetToken = function() {
-  const resetToken = crypto.randomBytes(32).toString('hex');
+// Instance method to create password reset code
+merchantSchema.methods.createPasswordResetCode = function() {
+  // Generate 6-digit code
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
   
-  this.passwordResetToken = crypto
+  // Hash the code before storing (for security)
+  this.passwordResetCode = crypto
     .createHash('sha256')
-    .update(resetToken)
+    .update(resetCode)
     .digest('hex');
   
-  // Token expires in 10 minutes
+  // Code expires in 10 minutes
   this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
   
-  return resetToken;
+  return resetCode; // Return the plain code to send via email
 };
 
 // Remove password from JSON response
 merchantSchema.methods.toJSON = function() {
   const obj = this.toObject();
   delete obj.password;
-  delete obj.passwordResetToken;
+  delete obj.passwordResetCode;
   delete obj.passwordResetExpires;
   return obj;
 };
