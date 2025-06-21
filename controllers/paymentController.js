@@ -6,10 +6,9 @@ import Customer from '../models/Customer.js';
 import Merchant from '../models/Merchant.js';
 import mongoose from 'mongoose';
 
-// Enhanced RFID payment processing with PIN verification
+// RFID payment processing with PIN verification and retry mechanism
 export const processRfidPayment = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
   
   try {
     const { cardUid, pin, amount, description } = req.body;
@@ -17,8 +16,6 @@ export const processRfidPayment = async (req, res, next) => {
     
     // Validate required fields
     if (!cardUid || !pin || !amount) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         status: 'error',
         message: 'Card UID, PIN, and amount are required'
@@ -27,38 +24,19 @@ export const processRfidPayment = async (req, res, next) => {
     
     // Verify amount
     if (amount <= 0) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         status: 'error',
         message: 'Please provide a valid amount'
       });
     }
     
-    // Find the merchant wallet
-    const merchantWallet = await Wallet.findOne({
-      owner: merchantId,
-      ownerType: 'Merchant'
-    }).session(session);
-    
-    if (!merchantWallet) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({
-        status: 'error',
-        message: 'Merchant wallet not found'
-      });
-    }
-    
-    // Find the RFID card with PIN for verification
-    const card = await RfidCard.findOne({
+    // Step 1: Handle PIN verification OUTSIDE of transaction
+    let card = await RfidCard.findOne({
       cardUid,
       isActive: true
-    }).select('+pin').session(session);
+    }).select('+pin');
     
     if (!card) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(404).json({
         status: 'error',
         message: 'Invalid or inactive RFID card'
@@ -67,17 +45,17 @@ export const processRfidPayment = async (req, res, next) => {
     
     // Check card status
     if (card.status === 'PIN_LOCKED') {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         status: 'error',
-        message: 'Card is locked due to multiple failed PIN attempts'
+        message: 'Card is locked due to multiple failed PIN attempts',
+        data: {
+          isLocked: true,
+          unlockTime: card.pinLockedUntil
+        }
       });
     }
     
     if (card.status !== 'ACTIVE') {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         status: 'error',
         message: `Card is ${card.status.toLowerCase()}`
@@ -88,26 +66,22 @@ export const processRfidPayment = async (req, res, next) => {
     if (card.expiryDate < new Date()) {
       card.isActive = false;
       card.status = 'EXPIRED';
-      await card.save({ session });
+      await card.save();
       
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         status: 'error',
         message: 'RFID card has expired'
       });
     }
     
-    // Verify PIN
+    // Verify PIN (outside transaction)
     try {
       const isValidPin = await card.verifyPin(pin);
+      
+      // Save PIN verification result immediately
+      await card.save();
+      
       if (!isValidPin) {
-        // Save the card to persist PIN attempt changes
-        await card.save({ session });
-        
-        await session.abortTransaction();
-        session.endSession();
-        
         const remainingAttempts = 3 - card.pinAttempts;
         return res.status(400).json({
           status: 'error',
@@ -118,11 +92,15 @@ export const processRfidPayment = async (req, res, next) => {
           }
         });
       }
-      // Save the card after successful PIN verification
-      await card.save({ session });
+      
     } catch (pinError) {
-      await session.abortTransaction();
-      session.endSession();
+      // Save the card even if there's an error
+      try {
+        await card.save();
+      } catch (saveError) {
+        console.error('Error saving card after PIN error:', saveError);
+      }
+      
       return res.status(400).json({
         status: 'error',
         message: pinError.message
@@ -131,8 +109,6 @@ export const processRfidPayment = async (req, res, next) => {
     
     // Check if PIN change is required
     if (card.requiresPinChange) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         status: 'error',
         message: 'PIN change required before making transactions',
@@ -140,111 +116,165 @@ export const processRfidPayment = async (req, res, next) => {
       });
     }
     
-    // Find the customer wallet
-    const customerWallet = await Wallet.findOne({
-      owner: card.owner,
-      ownerType: 'Customer'
-    }).session(session);
+    // Step 2: Start transaction for payment processing with retry mechanism
+    const maxRetries = 3;
+    let lastError = null;
     
-    if (!customerWallet) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({
-        status: 'error',
-        message: 'Customer wallet not found'
-      });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      session = await mongoose.startSession();
+      
+      try {
+        await session.startTransaction();
+        
+        // Find the merchant wallet
+        const merchantWallet = await Wallet.findOne({
+          owner: merchantId,
+          ownerType: 'Merchant'
+        }).session(session);
+        
+        if (!merchantWallet) {
+          throw new Error('Merchant wallet not found');
+        }
+        
+        // Refetch card with session
+        const cardInTransaction = await RfidCard.findOne({
+          cardUid,
+          isActive: true
+        }).session(session);
+        
+        if (!cardInTransaction) {
+          throw new Error('Card not found in transaction');
+        }
+        
+        // Find the customer wallet
+        const customerWallet = await Wallet.findOne({
+          owner: cardInTransaction.owner,
+          ownerType: 'Customer'
+        }).session(session);
+        
+        if (!customerWallet) {
+          throw new Error('Customer wallet not found');
+        }
+        
+        // Check sufficient balance
+        if (customerWallet.balance < amount) {
+          throw new Error(`Insufficient funds. Balance: ${customerWallet.balance}, Required: ${amount}`);
+        }
+        
+        // Generate a unique reference for this payment
+        const reference = `RFID${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        
+        // Create customer transaction (debit)
+        const customerTransaction = await Transaction.create([{
+          wallet: customerWallet._id,
+          amount: -amount, // Negative for debit
+          type: 'DEBIT',
+          description: description || 'RFID Payment',
+          reference: `${reference}-PAY`,
+          metadata: {
+            paymentType: 'RFID_TAP',
+            merchant: {
+              id: merchantId,
+              type: 'Merchant'
+            },
+            cardUid: cardUid,
+            cardId: cardInTransaction._id
+          }
+        }], { session });
+        
+        // Create merchant transaction (credit)
+        const merchantTransaction = await Transaction.create([{
+          wallet: merchantWallet._id,
+          amount,
+          type: 'CREDIT',
+          description: description || 'RFID Payment Received',
+          reference: `${reference}-RECV`,
+          metadata: {
+            paymentType: 'RFID_TAP',
+            customer: {
+              id: cardInTransaction.owner,
+              type: 'Customer'
+            },
+            cardUid: cardUid,
+            cardId: cardInTransaction._id
+          }
+        }], { session });
+        
+        // Update customer wallet
+        customerWallet.balance -= amount;
+        customerWallet.transactions.push(customerTransaction[0]._id);
+        await customerWallet.save({ session });
+        
+        // Update merchant wallet
+        merchantWallet.balance += amount;
+        merchantWallet.transactions.push(merchantTransaction[0]._id);
+        await merchantWallet.save({ session });
+        
+        // Update card last used timestamp
+        cardInTransaction.lastUsed = new Date();
+        await cardInTransaction.save({ session });
+        
+        await session.commitTransaction();
+        session.endSession();
+        
+        return res.status(200).json({
+          status: 'success',
+          message: 'Payment processed successfully',
+          data: {
+            amount,
+            customerBalance: customerWallet.balance,
+            merchantBalance: merchantWallet.balance,
+            transactionReference: reference,
+            customerTransaction: customerTransaction[0],
+            merchantTransaction: merchantTransaction[0]
+          }
+        });
+        
+      } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        
+        lastError = error;
+        
+        // Check if it's a write conflict error that we can retry
+        if (error.message && error.message.includes('Write conflict') && attempt < maxRetries) {
+          console.log(`Write conflict on attempt ${attempt}, retrying...`);
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+          continue;
+        } else {
+          // If it's not a retryable error or exhausted retries, break
+          break;
+        }
+      }
     }
     
-    // Check sufficient balance
-    if (customerWallet.balance < amount) {
-      await session.abortTransaction();
-      session.endSession();
+    // If we get here, all retries failed
+    if (lastError.message && lastError.message.includes('Insufficient funds')) {
       return res.status(400).json({
         status: 'error',
-        message: 'Insufficient funds in customer wallet',
-        data: {
-          balance: customerWallet.balance,
-          required: amount
-        }
+        message: 'Insufficient funds in customer wallet'
       });
+    } else if (lastError.message && lastError.message.includes('not found')) {
+      return res.status(404).json({
+        status: 'error',
+        message: lastError.message
+      });
+    } else {
+      throw lastError;
     }
     
-    // Generate a unique reference for this payment
-    const reference = `RFID${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    
-    // Create customer transaction (debit)
-    const customerTransaction = await Transaction.create([{
-      wallet: customerWallet._id,
-      amount: -amount, // Negative for debit
-      type: 'DEBIT',
-      description: description || 'RFID Payment',
-      reference: `${reference}-PAY`,
-      metadata: {
-        paymentType: 'RFID_TAP',
-        merchant: {
-          id: merchantId,
-          type: 'Merchant'
-        },
-        cardUid: cardUid,
-        cardId: card._id
-      }
-    }], { session });
-    
-    // Create merchant transaction (credit)
-    const merchantTransaction = await Transaction.create([{
-      wallet: merchantWallet._id,
-      amount,
-      type: 'CREDIT',
-      description: description || 'RFID Payment Received',
-      reference: `${reference}-RECV`,
-      metadata: {
-        paymentType: 'RFID_TAP',
-        customer: {
-          id: card.owner,
-          type: 'Customer'
-        },
-        cardUid: cardUid,
-        cardId: card._id
-      }
-    }], { session });
-    
-    // Update customer wallet
-    customerWallet.balance -= amount;
-    customerWallet.transactions.push(customerTransaction[0]._id);
-    await customerWallet.save({ session });
-    
-    // Update merchant wallet
-    merchantWallet.balance += amount;
-    merchantWallet.transactions.push(merchantTransaction[0]._id);
-    await merchantWallet.save({ session });
-    
-    // Update card last used timestamp
-    card.lastUsed = new Date();
-    await card.save({ session });
-    
-    await session.commitTransaction();
-    session.endSession();
-    
-    res.status(200).json({
-      status: 'success',
-      message: 'Payment processed successfully',
-      data: {
-        amount,
-        customerBalance: customerWallet.balance,
-        merchantBalance: merchantWallet.balance,
-        transactionReference: reference,
-        customerTransaction: customerTransaction[0],
-        merchantTransaction: merchantTransaction[0]
-      }
-    });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    console.error('Payment processing error:', error);
     next(error);
   }
 };
 
-// Enhanced card verification with PIN
+// card verification with PIN
 export const verifyRfidCard = async (req, res, next) => {
   try {
     const { cardUid } = req.params;
@@ -290,6 +320,10 @@ export const verifyRfidCard = async (req, res, next) => {
     if (pin) {
       try {
         const isValidPin = await card.verifyPin(pin);
+        
+        // Always save the card after verifyPin regardless of result
+        await card.save();
+        
         if (!isValidPin) {
           const remainingAttempts = 3 - card.pinAttempts;
           return res.status(400).json({
@@ -302,6 +336,13 @@ export const verifyRfidCard = async (req, res, next) => {
           });
         }
       } catch (pinError) {
+        // Save the card even if there's an error
+        try {
+          await card.save();
+        } catch (saveError) {
+          console.error('Error saving card after PIN error:', saveError);
+        }
+        
         return res.status(400).json({
           status: 'error',
           message: pinError.message

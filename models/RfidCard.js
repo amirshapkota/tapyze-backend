@@ -98,6 +98,10 @@ rfidCardSchema.methods.verifyPin = async function(candidatePin) {
       this.pinLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
       this.status = 'PIN_LOCKED';
     }
+    // Mark the fields as modified to ensure they're saved
+    this.markModified('pinAttempts');
+    this.markModified('pinLockedUntil');
+    this.markModified('status');
     return false;
   }
   
@@ -108,6 +112,12 @@ rfidCardSchema.methods.verifyPin = async function(candidatePin) {
     this.status = 'ACTIVE';
   }
   this.lastUsed = new Date();
+  
+  // Mark the fields as modified
+  this.markModified('pinAttempts');
+  this.markModified('pinLockedUntil');
+  this.markModified('status');
+  this.markModified('lastUsed');
   
   return true;
 };
