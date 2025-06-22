@@ -3,7 +3,8 @@ import {
   getWalletBalance,
   topUpWallet,
   transferFunds,
-  getTransactionHistory
+  getTransactionHistory,
+  findUserByPhone
 } from '../controllers/walletController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -17,5 +18,8 @@ router.get('/balance', getWalletBalance);
 router.post('/topup', topUpWallet);
 router.post('/transfer', transferFunds);
 router.get('/transactions', getTransactionHistory);
+
+// User lookup route
+router.get('/lookup/:phone', findUserByPhone);
 
 export default router;
